@@ -1,5 +1,5 @@
-# A Genetic Algorithm to Play Arkanoid
-
+# A Genetic Algorithm to Play Super Mario Bros.
+** README to be updated **
 Genetic Algorithms usually have long training times, in this project, I try to write an AI as well as reduce learning time, using chromosome growth.
 
 ## The Game
