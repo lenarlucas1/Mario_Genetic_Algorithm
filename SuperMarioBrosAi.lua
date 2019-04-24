@@ -1,271 +1,384 @@
--- The following section is from lua-users.org.
--- SHA-256 code in Lua 5.2; based on the pseudo-code from
--- Wikipedia (http://en.wikipedia.org/wiki/SHA-2)
+--[[---------------
+LuaBit v0.4
+-------------------
+a bitwise operation lib for lua.
 
+http://luaforge.net/projects/bit/
 
-local band, rrotate, bxor, rshift, bnot =
-  bit32.band, bit32.rrotate, bit32.bxor, bit32.rshift, bit32.bnot
+How to use:
+-------------------
+ bit.bnot(n) -- bitwise not (~n)
+ bit.band(m, n) -- bitwise and (m & n)
+ bit.bor(m, n) -- bitwise or (m | n)
+ bit.bxor(m, n) -- bitwise xor (m ^ n)
+ bit.brshift(n, bits) -- right shift (n >> bits)
+ bit.blshift(n, bits) -- left shift (n << bits)
+ bit.blogic_rshift(n, bits) -- logic right shift(zero fill >>>)
 
-local string, setmetatable, assert = string, setmetatable, assert
+Please note that bit.brshift and bit.blshift only support number within
+32 bits.
 
-_ENV = nil
+2 utility functions are provided too:
+ bit.tobits(n) -- convert n into a bit table(which is a 1/0 sequence)
+               -- high bits first
+ bit.tonumb(bit_tbl) -- convert a bit table into a number 
+-------------------
 
--- Initialize table of round constants
--- (first 32 bits of the fractional parts of the cube roots of the first
--- 64 primes 2..311):
-local k = {
-   0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
-   0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
-   0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
-   0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
-   0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc,
-   0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
-   0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
-   0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
-   0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13,
-   0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
-   0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3,
-   0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
-   0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5,
-   0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-   0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
-   0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
-}
+Under the MIT license.
 
+copyright(c) 2006~2007 hanzhao (abrash_han@hotmail.com)
+--]]---------------
 
--- transform a string of bytes in a string of hexadecimal digits
-local function str2hexa (s)
-  local h = string.gsub(s, ".", function(c)
-              return string.format("%02x", string.byte(c))
-            end)
-  return h
+--do
+
+------------------------
+-- bit lib implementions
+
+local function check_int(n)
+ -- checking not float
+ if(n - math.floor(n) > 0) then
+  error("trying to use bitwise operation on non-integer!")
+ end
 end
 
+local function tbl_to_number(tbl)
+ local n = #tbl
 
--- transform number 'l' in a big-endian sequence of 'n' bytes
--- (coded as a string)
-local function num2s (l, n)
-  local s = ""
-  for i = 1, n do
-    local rem = l % 256
-    s = string.char(rem) .. s
-    l = (l - rem) / 256
+ local rslt = 0
+ local power = 1
+ for i = 1, n do
+  rslt = rslt + tbl[i]*power
+  power = power*2
+ end
+
+ return rslt
+end
+
+local function expand(tbl_m, tbl_n)
+ local big = {}
+ local small = {}
+ if(#tbl_m > #tbl_n) then
+  big = tbl_m
+  small = tbl_n
+ else
+  big = tbl_n
+  small = tbl_m
+ end
+ -- expand small
+ for i = #small + 1, #big do
+  small[i] = 0
+ end
+
+end
+
+local to_bits = function () end
+
+local function bit_not(n)
+ local tbl = to_bits(n)
+ local size = math.max(#tbl, 32)
+ for i = 1, size do
+  if(tbl[i] == 1) then
+   tbl[i] = 0
+  else
+   tbl[i] = 1
   end
-  return s
+ end
+ return tbl_to_number(tbl)
 end
 
--- transform the big-endian sequence of four bytes starting at
--- index 'i' in 's' into a number
-local function s232num (s, i)
-  local n = 0
-  for i = i, i + 3 do
-    n = n*256 + string.byte(s, i)
+
+to_bits = function (n)
+ check_int(n)
+ if(n < 0) then
+  -- negative
+  return to_bits(bit_not(math.abs(n)) + 1)
+ end
+ -- to bits table
+ local tbl = {}
+ local cnt = 1
+ while (n > 0) do
+  local last = math.mod(n,2)
+  if(last == 1) then
+   tbl[cnt] = 1
+  else
+   tbl[cnt] = 0
   end
-  return n
+  n = (n-last)/2
+  cnt = cnt + 1
+ end
+
+ return tbl
 end
 
 
--- append the bit '1' to the message
--- append k bits '0', where k is the minimum number >= 0 such that the
--- resulting message length (in bits) is congruent to 448 (mod 512)
--- append length of message (before pre-processing), in bits, as 64-bit
--- big-endian integer
-local function preproc (msg, len)
-  local extra = -(len + 1 + 8) % 64
-  len = num2s(8 * len, 8)    -- original len in bits, coded
-  msg = msg .. "\128" .. string.rep("\0", extra) .. len
-  assert(#msg % 64 == 0)
-  return msg
+local function bit_or(m, n)
+ local tbl_m = to_bits(m)
+ local tbl_n = to_bits(n)
+ expand(tbl_m, tbl_n)
+
+ local tbl = {}
+ local rslt = math.max(#tbl_m, #tbl_n)
+ for i = 1, rslt do
+  if(tbl_m[i]== 0 and tbl_n[i] == 0) then
+   tbl[i] = 0
+  else
+   tbl[i] = 1
+  end
+ end
+
+ return tbl_to_number(tbl)
 end
 
+local function bit_and(m, n)
+ local tbl_m = to_bits(m)
+ local tbl_n = to_bits(n)
+ expand(tbl_m, tbl_n) 
 
-local function initH224 (H)
-  -- (second 32 bits of the fractional parts of the square roots of the
-  -- 9th through 16th primes 23..53)
-  H[1] = 0xc1059ed8
-  H[2] = 0x367cd507
-  H[3] = 0x3070dd17
-  H[4] = 0xf70e5939
-  H[5] = 0xffc00b31
-  H[6] = 0x68581511
-  H[7] = 0x64f98fa7
-  H[8] = 0xbefa4fa4
-  return H
+ local tbl = {}
+ local rslt = math.max(#tbl_m, #tbl_n)
+ for i = 1, rslt do
+  if(tbl_m[i]== 0 or tbl_n[i] == 0) then
+   tbl[i] = 0
+  else
+   tbl[i] = 1
+  end
+ end
+
+ return tbl_to_number(tbl)
 end
 
+local function bit_xor(m, n)
+ local tbl_m = to_bits(m)
+ local tbl_n = to_bits(n)
+ expand(tbl_m, tbl_n) 
 
-local function initH256 (H)
-  -- (first 32 bits of the fractional parts of the square roots of the
-  -- first 8 primes 2..19):
-  H[1] = 0x6a09e667
-  H[2] = 0xbb67ae85
-  H[3] = 0x3c6ef372
-  H[4] = 0xa54ff53a
-  H[5] = 0x510e527f
-  H[6] = 0x9b05688c
-  H[7] = 0x1f83d9ab
-  H[8] = 0x5be0cd19
-  return H
+ local tbl = {}
+ local rslt = math.max(#tbl_m, #tbl_n)
+ for i = 1, rslt do
+  if(tbl_m[i] ~= tbl_n[i]) then
+   tbl[i] = 1
+  else
+   tbl[i] = 0
+  end
+ end
+
+ --table.foreach(tbl, print)
+
+ return tbl_to_number(tbl)
 end
 
+local function bit_rshift(n, bits)
+ check_int(n)
 
-local function digestblock (msg, i, H)
+ local high_bit = 0
+ if(n < 0) then
+  -- negative
+  n = bit_not(math.abs(n)) + 1
+  high_bit = 2147483648 -- 0x80000000
+ end
 
-    -- break chunk into sixteen 32-bit big-endian words w[1..16]
-    local w = {}
-    for j = 1, 16 do
-      w[j] = s232num(msg, i + (j - 1)*4)
+ for i=1, bits do
+  n = n/2
+  n = bit_or(math.floor(n), high_bit)
+ end
+ return math.floor(n)
+end
+
+-- logic rightshift assures zero filling shift
+local function bit_logic_rshift(n, bits)
+ check_int(n)
+ if(n < 0) then
+  -- negative
+  n = bit_not(math.abs(n)) + 1
+ end
+ for i=1, bits do
+  n = n/2
+ end
+ return math.floor(n)
+end
+
+local function bit_lshift(n, bits)
+ check_int(n)
+
+ if(n < 0) then
+  -- negative
+  n = bit_not(math.abs(n)) + 1
+ end
+
+ for i=1, bits do
+  n = n*2
+ end
+ return bit_and(n, 4294967295) -- 0xFFFFFFFF
+end
+
+local function bit_xor2(m, n)
+ local rhs = bit_or(bit_not(m), bit_not(n))
+ local lhs = bit_or(m, n)
+ local rslt = bit_and(lhs, rhs)
+ return rslt
+end
+
+-- An MD5 mplementation in Lua, requires bitlib (hacked to use LuaBit from above, ugh)
+-- 10/02/2001 jcw@equi4.com
+
+local md5={ff=tonumber('ffffffff',16),consts={}}
+
+string.gsub([[ d76aa478 e8c7b756 242070db c1bdceee
+    f57c0faf 4787c62a a8304613 fd469501
+    698098d8 8b44f7af ffff5bb1 895cd7be
+    6b901122 fd987193 a679438e 49b40821
+    f61e2562 c040b340 265e5a51 e9b6c7aa
+    d62f105d 02441453 d8a1e681 e7d3fbc8
+    21e1cde6 c33707d6 f4d50d87 455a14ed
+    a9e3e905 fcefa3f8 676f02d9 8d2a4c8a
+    fffa3942 8771f681 6d9d6122 fde5380c
+    a4beea44 4bdecfa9 f6bb4b60 bebfbc70
+    289b7ec6 eaa127fa d4ef3085 04881d05
+    d9d4d039 e6db99e5 1fa27cf8 c4ac5665
+    f4292244 432aff97 ab9423a7 fc93a039
+    655b59c3 8f0ccc92 ffeff47d 85845dd1
+    6fa87e4f fe2ce6e0 a3014314 4e0811a1
+    f7537e82 bd3af235 2ad7d2bb eb86d391
+    67452301 efcdab89 98badcfe 10325476 ]],"(%w+)", function (s) table.insert(md5.consts, tonumber(s,16)) end)
+    --67452301 efcdab89 98badcfe 10325476 ]],"(%w+)", function (s) tinsert(md5.consts,tonumber(s,16)) end)
+
+function md5.transform(A,B,C,D,X)
+  local f=function (x,y,z) return bit_or(bit_and(x,y),bit_and(-x-1,z)) end
+  local g=function (x,y,z) return bit_or(bit_and(x,z),bit_and(y,-z-1)) end
+  local h=function (x,y,z) return bit_xor(x,bit_xor(y,z)) end
+  local i=function (x,y,z) return bit_xor(y,bit_or(x,-z-1)) end
+  local z=function (f,a,b,c,d,x,s,ac)
+        a=bit_and(a+f(b,c,d)+x+ac,md5.ff)
+        -- be *very* careful that left shift does not cause rounding!
+        return bit_or(bit_lshift(bit_and(a,bit_rshift(md5.ff,s)),s),bit_rshift(a,32-s))+b
+      end
+  local a,b,c,d=A,B,C,D
+  local t=md5.consts
+
+  a=z(f,a,b,c,d,X[ 0], 7,t[ 1])
+  d=z(f,d,a,b,c,X[ 1],12,t[ 2])
+  c=z(f,c,d,a,b,X[ 2],17,t[ 3])
+  b=z(f,b,c,d,a,X[ 3],22,t[ 4])
+  a=z(f,a,b,c,d,X[ 4], 7,t[ 5])
+  d=z(f,d,a,b,c,X[ 5],12,t[ 6])
+  c=z(f,c,d,a,b,X[ 6],17,t[ 7])
+  b=z(f,b,c,d,a,X[ 7],22,t[ 8])
+  a=z(f,a,b,c,d,X[ 8], 7,t[ 9])
+  d=z(f,d,a,b,c,X[ 9],12,t[10])
+  c=z(f,c,d,a,b,X[10],17,t[11])
+  b=z(f,b,c,d,a,X[11],22,t[12])
+  a=z(f,a,b,c,d,X[12], 7,t[13])
+  d=z(f,d,a,b,c,X[13],12,t[14])
+  c=z(f,c,d,a,b,X[14],17,t[15])
+  b=z(f,b,c,d,a,X[15],22,t[16])
+
+  a=z(g,a,b,c,d,X[ 1], 5,t[17])
+  d=z(g,d,a,b,c,X[ 6], 9,t[18])
+  c=z(g,c,d,a,b,X[11],14,t[19])
+  b=z(g,b,c,d,a,X[ 0],20,t[20])
+  a=z(g,a,b,c,d,X[ 5], 5,t[21])
+  d=z(g,d,a,b,c,X[10], 9,t[22])
+  c=z(g,c,d,a,b,X[15],14,t[23])
+  b=z(g,b,c,d,a,X[ 4],20,t[24])
+  a=z(g,a,b,c,d,X[ 9], 5,t[25])
+  d=z(g,d,a,b,c,X[14], 9,t[26])
+  c=z(g,c,d,a,b,X[ 3],14,t[27])
+  b=z(g,b,c,d,a,X[ 8],20,t[28])
+  a=z(g,a,b,c,d,X[13], 5,t[29])
+  d=z(g,d,a,b,c,X[ 2], 9,t[30])
+  c=z(g,c,d,a,b,X[ 7],14,t[31])
+  b=z(g,b,c,d,a,X[12],20,t[32])
+
+  a=z(h,a,b,c,d,X[ 5], 4,t[33])
+  d=z(h,d,a,b,c,X[ 8],11,t[34])
+  c=z(h,c,d,a,b,X[11],16,t[35])
+  b=z(h,b,c,d,a,X[14],23,t[36])
+  a=z(h,a,b,c,d,X[ 1], 4,t[37])
+  d=z(h,d,a,b,c,X[ 4],11,t[38])
+  c=z(h,c,d,a,b,X[ 7],16,t[39])
+  b=z(h,b,c,d,a,X[10],23,t[40])
+  a=z(h,a,b,c,d,X[13], 4,t[41])
+  d=z(h,d,a,b,c,X[ 0],11,t[42])
+  c=z(h,c,d,a,b,X[ 3],16,t[43])
+  b=z(h,b,c,d,a,X[ 6],23,t[44])
+  a=z(h,a,b,c,d,X[ 9], 4,t[45])
+  d=z(h,d,a,b,c,X[12],11,t[46])
+  c=z(h,c,d,a,b,X[15],16,t[47])
+  b=z(h,b,c,d,a,X[ 2],23,t[48])
+
+  a=z(i,a,b,c,d,X[ 0], 6,t[49])
+  d=z(i,d,a,b,c,X[ 7],10,t[50])
+  c=z(i,c,d,a,b,X[14],15,t[51])
+  b=z(i,b,c,d,a,X[ 5],21,t[52])
+  a=z(i,a,b,c,d,X[12], 6,t[53])
+  d=z(i,d,a,b,c,X[ 3],10,t[54])
+  c=z(i,c,d,a,b,X[10],15,t[55])
+  b=z(i,b,c,d,a,X[ 1],21,t[56])
+  a=z(i,a,b,c,d,X[ 8], 6,t[57])
+  d=z(i,d,a,b,c,X[15],10,t[58])
+  c=z(i,c,d,a,b,X[ 6],15,t[59])
+  b=z(i,b,c,d,a,X[13],21,t[60])
+  a=z(i,a,b,c,d,X[ 4], 6,t[61])
+  d=z(i,d,a,b,c,X[11],10,t[62])
+  c=z(i,c,d,a,b,X[ 2],15,t[63])
+  b=z(i,b,c,d,a,X[ 9],21,t[64])
+
+  return A+a,B+b,C+c,D+d
+end
+
+-- convert little-endian 32-bit int to a 4-char string
+local function leIstr(i)
+  local f=function (s) return string.char(bit_and(bit_rshift(i,s),255)) end
+  return f(0)..f(8)..f(16)..f(24)
+end
+
+  -- convert raw string to big-endian int
+  local function beInt(s)
+    local v=0
+    for i=1,string.len(s) do v=v*256+string.byte(s,i) end
+    return v
+  end
+  -- convert raw string to little-endian int
+  local function leInt(s)
+    local v=0
+    for i=string.len(s),1,-1 do v=v*256+string.byte(s,i) end
+    return v
+  end
+  -- cut up a string in little-endian ints of given size
+  local function leStrCuts(s,...)
+    local o,r=1,{}
+    for i=1,#arg do
+      table.insert(r,leInt(string.sub(s,o,o+arg[i]-1)))
+      o=o+arg[i]
     end
-
-    -- Extend the sixteen 32-bit words into sixty-four 32-bit words:
-    for j = 17, 64 do
-      local v = w[j - 15]
-      local s0 = bxor(rrotate(v, 7), rrotate(v, 18), rshift(v, 3))
-      v = w[j - 2]
-      local s1 = bxor(rrotate(v, 17), rrotate(v, 19), rshift(v, 10))
-      w[j] = w[j - 16] + s0 + w[j - 7] + s1
-    end
-
-    -- Initialize hash value for this chunk:
-    local a, b, c, d, e, f, g, h =
-        H[1], H[2], H[3], H[4], H[5], H[6], H[7], H[8]
-
-    -- Main loop:
-    for i = 1, 64 do
-      local s0 = bxor(rrotate(a, 2), rrotate(a, 13), rrotate(a, 22))
-      local maj = bxor(band(a, b), band(a, c), band(b, c))
-      local t2 = s0 + maj
-      local s1 = bxor(rrotate(e, 6), rrotate(e, 11), rrotate(e, 25))
-      local ch = bxor (band(e, f), band(bnot(e), g))
-      local t1 = h + s1 + ch + k[i] + w[i]
-
-      h = g
-      g = f
-      f = e
-      e = d + t1
-      d = c
-      c = b
-      b = a
-      a = t1 + t2
-    end
-
-    -- Add (mod 2^32) this chunk's hash to result so far:
-    H[1] = band(H[1] + a)
-    H[2] = band(H[2] + b)
-    H[3] = band(H[3] + c)
-    H[4] = band(H[4] + d)
-    H[5] = band(H[5] + e)
-    H[6] = band(H[6] + f)
-    H[7] = band(H[7] + g)
-    H[8] = band(H[8] + h)
-
-end
-
-
-local function finalresult224 (H)
-  -- Produce the final hash value (big-endian):
-  return
-    str2hexa(num2s(H[1], 4)..num2s(H[2], 4)..num2s(H[3], 4)..num2s(H[4], 4)..
-             num2s(H[5], 4)..num2s(H[6], 4)..num2s(H[7], 4))
-end
-
-
-local function finalresult256 (H)
-  -- Produce the final hash value (big-endian):
-  return
-    str2hexa(num2s(H[1], 4)..num2s(H[2], 4)..num2s(H[3], 4)..num2s(H[4], 4)..
-             num2s(H[5], 4)..num2s(H[6], 4)..num2s(H[7], 4)..num2s(H[8], 4))
-end
-
-
-----------------------------------------------------------------------
-local HH = {}    -- to reuse
-
-local function hash224 (msg)
-  msg = preproc(msg, #msg)
-  local H = initH224(HH)
-
-  -- Process the message in successive 512-bit (64 bytes) chunks:
-  for i = 1, #msg, 64 do
-    digestblock(msg, i, H)
+    return r
   end
 
-  return finalresult224(H)
-end
-
-
-local function hash256 (msg)
-  msg = preproc(msg, #msg)
-  local H = initH256(HH)
-
-  -- Process the message in successive 512-bit (64 bytes) chunks:
-  for i = 1, #msg, 64 do
-    digestblock(msg, i, H)
+function md5.Calc(s)
+  local msgLen=string.len(s)
+  local padLen=56- msgLen % 64
+  if msgLen % 64 > 56 then padLen=padLen+64 end
+  if padLen==0 then padLen=64 end
+  s=s..string.char(128)..string.rep(string.char(0),padLen-1)
+  s=s..leIstr(8*msgLen)..leIstr(0)
+  assert(string.len(s) % 64 ==0)
+  local t=md5.consts
+  local a,b,c,d=t[65],t[66],t[67],t[68]
+  for i=1,string.len(s),64 do
+    local X=leStrCuts(string.sub(s,i,i+63),4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4)
+    assert(#X==16)
+    X[0]=table.remove(X,1) -- zero based!
+    a,b,c,d=md5.transform(a,b,c,d,X)
   end
-
-  return finalresult256(H)
+  local swap=function (w) return beInt(leIstr(w)) end
+  return string.format("%08x%08x%08x%08x",swap(a),swap(b),swap(c),swap(d))
 end
-----------------------------------------------------------------------
-local mt = {}
-
-local function new256 ()
-  local o = {H = initH256({}), msg = "", len = 0}
-  setmetatable(o, mt)
-  return o
-end
-
-mt.__index = mt
-
-function mt:add (m)
-  self.msg = self.msg .. m
-  self.len = self.len + #m
-  local t = 0
-  while #self.msg - t >= 64 do
-    digestblock(self.msg, t + 1, self.H)
-    t = t + 64 
-  end
-  self.msg = self.msg:sub(t + 1, -1)
-end
-
-
-function mt:close ()
-  self.msg = preproc(self.msg, self.len)
-  self:add("")
-  return finalresult256(self.H)
-end
-----------------------------------------------------------------------
-
-return {
-  hash224 = hash224,
-  hash256 = hash256,
-  new256 = new256,
-}
---[[
-A Genetic Algorithm implementation to play Super Mario Bros.(NES).
-Written in Lua, runs on FCEUX 2.2.3.
-
-
-Chromosome is encoded as follows: 
-A 32-bit binary string.
---]]
-
-
-
 
 --MEMORY ADDRESSES USED IN THE RAM ON FCEUX.
-local score_hundred= 0x0373;               --The Score(Can be used for fitness)
-local score_tens=0x0374;
-local score_unit =0x0375;
-
-local lives_addr=0x000D;                   --Number of lives remaining(Debugging Only!)
-local ball_pos_y_addr=0x0037;              --Y Pos of the ball(Used for debugging only!)
-local ball_pos_x_addr=0x0038;              --X Pos of the ball(Used for debugging only!)
-local no_of_blocks_addr=0x000F;            --Number of blocks remaining
-local pad_addr=0x011C;                     --Current X Pos of the Paddle. Used to check if paddle has gone out of bounds.(Explained Later)
-local death=0x0081;                        --The variable which tells if the player has died or not.
-
-
-
+local world_addr = 0x075f;
+local level_addr = 0x0760;
+local player_horiz_pos_addr = 0x006d;
+local player_x_pos_addr = 0x071d;
 
 --Variables specific to Genetic Algorithms
 local no_controls=15;                       --The total number of moves the paddle can make(Length of the chromosome)
@@ -277,737 +390,49 @@ local max_score=50000;                      --The Maximum possible score for a l
 local steps=0;                              --The number of frames that the game has played for (Can be used for fitness).
 local max_steps=6000;                       --The maximum number of frames the game can play for.
 
-local control_gap=5;                        --NEW! The amount of genes to add to the chromosome every generation.
-local tbl = { {up      = 0,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 0,
-			        	start   = false,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 0,
-			        	start   = false,
-			        	select  = true
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 0,
-			        	start   = true,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 1,
-			        	start   = false,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 1,
-			        	B       = 0,
-			        	start   = false,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 1,
-			        	A       = 0,
-			        	B       = 0,
-			        	start   = false,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 1,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 0,
-			        	start   = false,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 1,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 0,
-			        	start   = false,
-			        	select  = false
-			        	},
-			        	{up      = 1,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 0,
-			        	start   = false,
-			        	select  = false
-			        	},
-			        	{up      = 1,
-	        			down    = 0,
-	        			left    = 1,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 0,
-			        	start   = false,
-			        	select  = false
-			        	},
-			        	{up      = 1,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 1,
-			        	A       = 0,
-			        	B       = 0,
-			        	start   = false,
-			        	select  = false
-			        	},
-			        	{up      = 1,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 1,
-			        	B       = 0,
-			        	start   = false,
-			        	select  = false
-			        	},
-			        	{up      = 1,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 1,
-			        	start   = false,
-			        	select  = false
-			        	},
-			        	{up      = 1,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 0,
-			        	start   = true,
-			        	select  = false
-			        	},
-			        	{up      = 1,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 0,
-			        	start   = false,
-			        	select  = true
-			        	},
-			        	{up      = 0,
-	        			down    = 1,
-	        			left    = 1,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 0,
-			        	start   = false,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 1,
-	        			left    = 0,
-	        			right   = 1,
-			        	A       = 0,
-			        	B       = 0,
-			        	start   = false,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 1,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 1,
-			        	B       = 0,
-			        	start   = false,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 1,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 1,
-			        	start   = false,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 1,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 0,
-			        	start   = true,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 1,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 0,
-			        	start   = false,
-			        	select  = true
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 1,
-	        			right   = 0,
-			        	A       = 1,
-			        	B       = 0,
-			        	start   = false,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 1,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 1,
-			        	start   = false,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 1,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 0,
-			        	start   = true,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 1,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 0,
-			        	start   = false,
-			        	select  = true
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 1,
-			        	A       = 1,
-			        	B       = 0,
-			        	start   = false,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 1,
-			        	A       = 0,
-			        	B       = 1,
-			        	start   = false,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 1,
-			        	A       = 0,
-			        	B       = 0,
-			        	start   = true,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 1,
-			        	A       = 0,
-			        	B       = 0,
-			        	start   = false,
-			        	select  = true
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 1,
-			        	B       = 1,
-			        	start   = false,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 1,
-			        	B       = 0,
-			        	start   = true,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 1,
-			        	B       = 0,
-			        	start   = false,
-			        	select  = true
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 1,
-			        	start   = true,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 1,
-			        	start   = false,
-			        	select  = true
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 0,
-			        	start   = true,
-			        	select  = true
-			        	},
-			        	{up      = 1,
-	        			down    = 0,
-	        			left    = 1,
-	        			right   = 0,
-			        	A       = 1,
-			        	B       = 0,
-			        	start   = false,
-			        	select  = false
-			        	},
-			        	{up      = 1,
-	        			down    = 0,
-	        			left    = 1,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 1,
-			        	start   = false,
-			        	select  = false
-			        	},
-			        	{up      = 1,
-	        			down    = 0,
-	        			left    = 1,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 0,
-			        	start   = true,
-			        	select  = false
-			        	},
-			        	{up      = 1,
-	        			down    = 0,
-	        			left    = 1,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 0,
-			        	start   = false,
-			        	select  = true
-			        	},
-			        	{up      = 1,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 1,
-			        	A       = 1,
-			        	B       = 0,
-			        	start   = false,
-			        	select  = false
-			        	},
-			        	{up      = 1,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 1,
-			        	A       = 0,
-			        	B       = 1,
-			        	start   = false,
-			        	select  = false
-			        	},
-			        	{up      = 1,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 1,
-			        	A       = 0,
-			        	B       = 0,
-			        	start   = true,
-			        	select  = false
-			        	},
-			        	{up      = 1,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 1,
-			        	A       = 0,
-			        	B       = 0,
-			        	start   = false,
-			        	select  = true
-			        	},
-			        	{up      = 1,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 1,
-			        	B       = 1,
-			        	start   = false,
-			        	select  = false
-			        	},
-			        	{up      = 1,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 1,
-			        	B       = 0,
-			        	start   = true,
-			        	select  = false
-			        	},
-			        	{up      = 1,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 1,
-			        	B       = 0,
-			        	start   = false,
-			        	select  = true
-			        	},
-			        	{up      = 1,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 1,
-			        	start   = true,
-			        	select  = false
-			        	},
-			        	{up      = 1,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 1,
-			        	start   = false,
-			        	select  = true
-			        	},
-			        	{up      = 1,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 0,
-			        	start   = true,
-			        	select  = true
-			        	},
-			        	{up      = 0,
-	        			down    = 1,
-	        			left    = 1,
-	        			right   = 0,
-			        	A       = 1,
-			        	B       = 0,
-			        	start   = false,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 1,
-	        			left    = 1,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 1,
-			        	start   = false,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 1,
-	        			left    = 1,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 0,
-			        	start   = true,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 1,
-	        			left    = 1,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 0,
-			        	start   = false,
-			        	select  = true
-			        	},
-			        	{up      = 0,
-	        			down    = 1,
-	        			left    = 0,
-	        			right   = 1,
-			        	A       = 1,
-			        	B       = 0,
-			        	start   = false,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 1,
-	        			left    = 0,
-	        			right   = 1,
-			        	A       = 0,
-			        	B       = 1,
-			        	start   = false,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 1,
-	        			left    = 0,
-	        			right   = 1,
-			        	A       = 0,
-			        	B       = 0,
-			        	start   = true,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 1,
-	        			left    = 0,
-	        			right   = 1,
-			        	A       = 0,
-			        	B       = 0,
-			        	start   = false,
-			        	select  = true
-			        	},
-			        	{up      = 0,
-	        			down    = 1,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 1,
-			        	B       = 1,
-			        	start   = false,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 1,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 1,
-			        	B       = 0,
-			        	start   = true,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 1,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 1,
-			        	B       = 0,
-			        	start   = false,
-			        	select  = true
-			        	},
-			        	{up      = 0,
-	        			down    = 1,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 1,
-			        	start   = true,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 1,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 1,
-			        	start   = false,
-			        	select  = true
-			        	},
-			        	{up      = 0,
-	        			down    = 1,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 0,
-			        	start   = true,
-			        	select  = true
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 1,
-	        			right   = 0,
-			        	A       = 1,
-			        	B       = 1,
-			        	start   = false,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 1,
-	        			right   = 0,
-			        	A       = 1,
-			        	B       = 0,
-			        	start   = true,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 1,
-	        			right   = 0,
-			        	A       = 1,
-			        	B       = 0,
-			        	start   = false,
-			        	select  = true
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 1,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 1,
-			        	start   = true,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 1,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 1,
-			        	start   = false,
-			        	select  = true
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 1,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 0,
-			        	start   = true,
-			        	select  = true
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 1,
-			        	A       = 1,
-			        	B       = 1,
-			        	start   = false,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 1,
-			        	A       = 1,
-			        	B       = 0,
-			        	start   = true,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 1,
-			        	A       = 1,
-			        	B       = 0,
-			        	start   = false,
-			        	select  = true
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 1,
-			        	A       = 0,
-			        	B       = 1,
-			        	start   = true,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 1,
-			        	A       = 0,
-			        	B       = 1,
-			        	start   = false,
-			        	select  = true
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 1,
-			        	A       = 0,
-			        	B       = 0,
-			        	start   = true,
-			        	select  = true
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 1,
-			        	B       = 1,
-			        	start   = true,
-			        	select  = false
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 1,
-			        	B       = 1,
-			        	start   = false,
-			        	select  = true
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 1,
-			        	B       = 0,
-			        	start   = true,
-			        	select  = true
-			        	},
-			        	{up      = 0,
-	        			down    = 0,
-	        			left    = 0,
-	        			right   = 0,
-			        	A       = 0,
-			        	B       = 1,
-			        	start   = true,
-			        	select  = true
-			        	},
-			        	{up      = 1,
-	        			down    = 0,
-	        			left    = 1,
-	        			right   = 0,
-			        	A       = 1,
-			        	B       = 1,
-			        	start   = false,
-			        	select  = false
-			        	},
-			        	{up      = 1,
-	        			down    = 0,
-	        			left    = 1,
-	        			right   = 0,
-			        	A       = 1,
-			        	B       = 0,
-			        	start   = true,
-			        	select  = false
-			        	},
-			        	}
+local inputs = {};
+
+for i=1,2 do								--Create power set of possible inputs
+	up_val = i-1;
+	for j=1,2 do
+		down_val = j-1;
+		for k=1,2 do
+			left_val = k-1;
+			for l=1,2 do
+				right_val = l -1;
+				for m=1,2 do
+					A_val = m-1;
+					for n=1,2 do
+						B_val = n-1;
+						for o=1,2 do
+							if o==1 then
+								start_val = false;
+							else start_val = true;
+							end
+							for p=1,2 do
+								if p==1 then
+									select_val = false;
+								else select_val = true;
+								end
+								table.insert(inputs, {up = up_val,
+													down = down_val,
+													left = left_val,
+													right = right_val,
+													A = A_val,
+													B = B_val,
+													start = start_val,
+													select = select_val
+													})
+								
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+end
+
 
 
 --Create a random chromosome of size=sz. Eg: 11000110111110
@@ -1021,9 +446,9 @@ function create_member(sz)
 end
 
 
---The Fitness formula, you can use Number of Blocks, Score, Number of Frames elapsed to create a formula to get fitness.(Number of Blocks for now).
-function fitness(n_b,m_b,stps,m_s,sc,m_s)
-	return (100-(n_b/m_b)*100);
+--The Fitness formula, 
+function fitness(world, level, x, x2)
+	return world*100 + level*10 + x +x2;
 end
 
 
@@ -1112,12 +537,6 @@ function mutation(population,mut_rate)
 end
 
 --Read initial values from memory when the script is run after game starts.
-local ball_pos_y=memory.readbyte(ball_pos_y_addr);                       
-local no_blocks=memory.readbyte(no_of_blocks_addr);
-local pad_pos=memory.readbyte(pad_addr);
-local ball_pos_x=memory.readbyte(ball_pos_x_addr);
-local max_blocks=memory.readbyte(no_of_blocks_addr);
-local is_dead=memory.readbyte(death);
 
 --Temporary variables for debugging and use in the game
 local score=0;
@@ -1173,23 +592,18 @@ while true do
 		--Temporary variables
 		local j=1;
 		ti=1;
-
+		
+		--TODO: Change loop. We are not iterating through an input string.
 		--Loop to run on the input string. Iterates through each bit.
 		while ti<=no_controls do
 			--Increase steps
 			steps=steps+1;
 			--Read memory and update variables
-			ball_pos_y=memory.readbyte(ball_pos_y_addr);
-			no_blocks=memory.readbyte(no_of_blocks_addr);
-			pad_pos=memory.readbyte(pad_addr);
-			ball_pos_x=memory.readbyte(ball_pos_x_addr);
-			is_dead=memory.readbyte(death);
 
 			--Used for debugging only!
-			diff=pad_pos-ball_pos_x;
 			
 			--Checks if it is game over or player is dead, then writes its fitness and calculates average, and remembers if it the best fitness.
-			if is_dead==0 then
+			--[[if is_dead==0 then
 				pop[i][2]=fitness(no_blocks,max_blocks,steps,max_steps,score,max_score);
 				avg=avg+pop[i][2];
 				if pop[i][2]>best_f then
@@ -1197,10 +611,10 @@ while true do
 				end
 				ti=1;
 				break;
-			end
+			end]]
 
 			--Checks to see if pad is out of bounds left or right, this is due to a powerup which opens a portal skipping the level.
-			if pad_pos>=180 or pad_pos<=10 then
+			--[[if pad_pos>=180 or pad_pos<=10 then
 				pop[i][2]=fitness(no_blocks,max_blocks,steps,max_steps,score,max_score);
 				avg=avg+pop[i][2];
 				if pop[i][2]>best_f then
@@ -1210,19 +624,19 @@ while true do
 				winner=1;
 				ti=1;
 				break;
-			end
+			end]]
 			
 
 			--Winning condition, if there are no blocks, the cadidate is the winner.
-			if no_blocks<=0 then
+			--[[if no_blocks<=0 then
 				winner_inp=cand;
 				winner=1;
 				ti=1;
 				break;
-			end
+			end]]
 
 			--If Ball goes below the paddle, then the player has lost.
-			if ball_pos_y>=230 then
+			--[[if ball_pos_y>=230 then
 				pop[i][2]=fitness(no_blocks,max_blocks,steps,max_steps,score,max_score);
 				avg=avg+pop[i][2];
 				if pop[i][2]>best_f then
@@ -1230,7 +644,7 @@ while true do
 				end
 				ti=1;
 				break;
-			end
+			end]]
 
 			--This is used to make sure a button is held down(Left or Right) for 'frame_gap' amount of frames for smooth movement.(Important)
 			if count<frame_gap then
@@ -1239,25 +653,17 @@ while true do
 					gui.text(0, 9, "Generation:"..gen_count);
 					gui.text(0,39,"Candidate:"..i)
 					gui.text(0,19,"BestFit:"..best_f);
-					gui.text(0,29,"Blocks:"..no_blocks);
+					--gui.text(0,29,"Blocks:"..no_blocks);
 					gui.text(0,49,"Control:"..ti);
 					--Table of what buttons to hold down/press.
-					
+					input_index = tonumber(md5.Calc(cand), 16) % 256;
+					tbl = inputs[input_index+1];
 			        	
-					tbl={
-	        			up      = 0,
-	        			down    = 0,
-	        			left    = lrv,
-	        			right   = not lrv,
-			        	A       = 1,
-			        	B       = 1,
-			        	start   = false,
-			        	select  = false
-			        	};
+					
 			        --set controls on the joypad.
 	        		joypad.set(1,tbl);
 	        		--calculate score
-	        		score=memory.readbyte(score_hundred)*100+memory.readbyte(score_tens)*10+memory.readbyte(score_unit);
+	        		--score=memory.readbyte(score_hundred)*100+memory.readbyte(score_tens)*10+memory.readbyte(score_unit);
 	        		--Advance one frame
 					emu.frameadvance();
 					--increment count
@@ -1272,17 +678,10 @@ while true do
 				else
 					lrv = false;
 				end
-				--Table of controls.	
-		    	tbl={
-		        	up      = 0,
-		        	down    = 0,
-		        	left    = lrv,
-		        	right   = not lrv,
-		        	A       = 0,
-		        	B       = 0,
-		        	start   = false,
-		        	select  = false
-		        	};
+				--Table of controls.
+				input_index = tonumber(md5.Calc(cand), 16) % 256;
+				
+		    	tbl = inputs[input_index+1];
 		        -- set buttons on joypad
 		        joypad.set(1,tbl);
 		        --Print information on game Surface
