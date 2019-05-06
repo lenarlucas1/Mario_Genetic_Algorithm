@@ -375,10 +375,92 @@ function md5.Calc(s)
 end
 
 --MEMORY ADDRESSES USED IN THE RAM ON FCEUX.
-local world_addr = 0x075f;
-local level_addr = 0x0760;
-local player_horiz_pos_addr = 0x006d;
-local player_x_pos_addr = 0x071d;
+local world_ad = 0x075f;
+local level_ad = 0x0760;
+local player_horiz_pos_ad = 0x006d;
+local player_x_pos_ad = 0x071d;
+local player_y_ad = 0x00ce;
+local powerup_state_ad = 0x0756;
+local walk_animation_ad = 0x0702;
+local speed_ad = 0x0700;
+local swimming_ad = 0x0704;
+local pause_status_ad = 0x0776;
+local gravity_ad = 0x709;
+local coins_ad = 0x7ed;
+local coins2_ad = 0x7ee;
+local fireball_counter_ad = 0x06ce;
+local collision_ad = 0x0490;
+local collision2_ad = 0x0491;
+local vert_velocity_ad = 0x0433;
+local player_x_force_ad = 0x0400;
+
+local enemy_drawn1_ad = 0x000f;
+local enemy_drawn2_ad = 0x0010;
+local enemy_drawn3_ad = 0x0011;
+local enemy_drawn4_ad = 0x0012;
+local enemy_drawn5_ad = 0x0013;
+local enemy_type1_ad = 0x0016;
+local enemy_type2_ad = 0x0017;
+local enemy_type3_ad = 0x0018;
+local enemy_type4_ad = 0x0019;
+local enemy_type5_ad = 0x001a;
+
+local fireball_relative_x_ad = 0x03af;
+local fireball_relative_y_ad = 0x03ba;
+
+local enemy_x_pos1_ad = 0x03ae;
+local enemy_x_pos2_ad = 0x03af;
+local enemy_x_pos3_ad = 0x03b0;
+local enemy_x_pos4_ad = 0x03b1;
+local enemy_x_pos5_ad = 0x03b2;
+local enemy_y_pos_ad = 0x03b9;
+local enemy_y_pos2_ad = 0x03ba;
+local enemy_y_pos3_ad = 0x03bb;
+local enemy_y_pos4_ad = 0x03bc;
+local enemy_y_pos5_ad = 0x03bd;
+
+local powerup_drawn_ad = 0x0014;
+local powerup_x_ad = 0x03b3;
+local powerup_y_ad = 0x03be;
+
+local fireball_hitbox1_ad = 0x04c8;
+local fireball_hitbox2_ad = 0x04c9;
+local fireball_hitbox3_ad = 0x04ca;
+local fireball_hitbox4_ad = 0x04cb;
+local fireball_hitbox5_ad = 0x04cc;
+local fireball_hitbox6_ad = 0x04cd;
+local fireball_hitbox7_ad = 0x04ce;
+local fireball_hitbox8_ad = 0x04cf;
+
+local hammer_hitbox1_ad = 0x04d0;
+local hammer_hitbox2_ad = 0x04d1;
+local hammer_hitbox3_ad = 0x04d2;
+local hammer_hitbox4_ad = 0x04d3;
+local hammer_hitbox5_ad = 0x04d4;
+local hammer_hitbox6_ad = 0x04d5;
+local hammer_hitbox7_ad = 0x04d6;
+local hammer_hitbox8_ad = 0x04d7;
+local hammer_hitbox9_ad = 0x04d8;
+local hammer_hitbox10_ad = 0x04d9;
+local hammer_hitbox11_ad = 0x04da;
+local hammer_hitbox12_ad = 0x04db;
+local hammer_hitbox13_ad = 0x04dc;
+local hammer_hitbox14_ad = 0x04dd;
+local hammer_hitbox15_ad = 0x04de;
+local hammer_hitbox16_ad = 0x04df;
+
+local coin_hitbox1_ad = 0x04e0;
+local coin_hitbox2_ad = 0x04e1;
+local coin_hitbox3_ad = 0x04e2;
+local coin_hitbox4_ad = 0x04e3;
+local coin_hitbox5_ad = 0x04e4;
+local coin_hitbox6_ad = 0x04e5;
+local coin_hitbox7_ad = 0x04e6;
+local coin_hitbox8_ad = 0x04e7;
+local coin_hitbox9_ad = 0x04e8;
+local coin_hitbox10_ad = 0x04e9;
+local coin_hitbox11_ad = 0x04ea;
+local coin_hitbox12_ad = 0x04eb;
 
 --Variables specific to Genetic Algorithms
 local no_controls=15;                       --The total number of moves the paddle can make(Length of the chromosome)
@@ -393,17 +475,35 @@ local max_steps=6000;                       --The maximum number of frames the g
 local inputs = {};
 
 for i=1,2 do								--Create power set of possible inputs
-	up_val = i-1;
+	if i==1 then
+		up_val = false;
+	else up_val = true;
+	end
 	for j=1,2 do
-		down_val = j-1;
+		if j==1 then
+			down_val = false;
+		else down_val = true;
+		end
 		for k=1,2 do
-			left_val = k-1;
+			if k==1 then
+				left_val = false;
+			else left_val = true;
+			end
 			for l=1,2 do
-				right_val = l -1;
+				if l==1 then
+					right_val = false;
+				else right_val = true;
+				end
 				for m=1,2 do
-					A_val = m-1;
+					if m==1 then
+						A_val = false;
+					else A_val = true;
+					end
 					for n=1,2 do
-						B_val = n-1;
+						if n==1 then
+							B_val = false;
+						else B_val = true;
+						end
 						for o=1,2 do
 							if o==1 then
 								start_val = false;
@@ -434,7 +534,6 @@ for i=1,2 do								--Create power set of possible inputs
 end
 
 
-
 --Create a random chromosome of size=sz. Eg: 11000110111110
 function create_member(sz)
 	r='';
@@ -448,7 +547,7 @@ end
 
 --The Fitness formula, 
 function fitness(world, level, x, x2)
-	return world*100 + level*10 + x +x2;
+	return world*10000 + level*1000 + 100*x +x2;
 end
 
 
@@ -476,25 +575,11 @@ end
 function crossover(population,rate)
 	--Select Top percentile players from population based on the Rate.
 	local topp=math.floor(rate*(#population));
-
-	--The commented section adds a feature to control 'control_gap' variable if the generations increase over a limit.
-	--[[
-	if gen_count%30==0 then
-		control_gap=control_gap-1;
-	end
-	--]]
 	
 	--Store the top performers in a new table.
 	top={}
 	for i=1,topp do
 		table.insert(top,population[i])
-	end
-
-
-	--Add new controls to the top performers(Increase chromosome size here)
-	for i=1,topp do
-		population[i][1]=top[i][1]..create_member(control_gap);
-		population[i][2]=0;
 	end
 
 	--The rest of the new population is then obtained by crossing over one random top performer with the starting bits of another top performer.
@@ -508,8 +593,7 @@ function crossover(population,rate)
 		end
 		population[i][2]=0;
 	end
-	--Increase number of controls( Chromosome Size)
-	no_controls=no_controls+control_gap;
+	
 
 	--Make last ten members of population Random, This helps to find a variety of beginning positions in the starting generations and prevents convergence to local optima.
 	for i=#population-9,#population do
@@ -603,7 +687,7 @@ while true do
 			--Used for debugging only!
 			
 			--Checks if it is game over or player is dead, then writes its fitness and calculates average, and remembers if it the best fitness.
-			--[[if is_dead==0 then
+			--if is_dead==0 then
 				pop[i][2]=fitness(no_blocks,max_blocks,steps,max_steps,score,max_score);
 				avg=avg+pop[i][2];
 				if pop[i][2]>best_f then
@@ -611,10 +695,10 @@ while true do
 				end
 				ti=1;
 				break;
-			end]]
+			end
 
 			--Checks to see if pad is out of bounds left or right, this is due to a powerup which opens a portal skipping the level.
-			--[[if pad_pos>=180 or pad_pos<=10 then
+			--if pad_pos>=180 or pad_pos<=10 then
 				pop[i][2]=fitness(no_blocks,max_blocks,steps,max_steps,score,max_score);
 				avg=avg+pop[i][2];
 				if pop[i][2]>best_f then
@@ -624,19 +708,19 @@ while true do
 				winner=1;
 				ti=1;
 				break;
-			end]]
+			end
 			
 
 			--Winning condition, if there are no blocks, the cadidate is the winner.
-			--[[if no_blocks<=0 then
+			  if no_blocks<=0 then
 				winner_inp=cand;
 				winner=1;
 				ti=1;
 				break;
-			end]]
+			end
 
 			--If Ball goes below the paddle, then the player has lost.
-			--[[if ball_pos_y>=230 then
+				if ball_pos_y>=230 then
 				pop[i][2]=fitness(no_blocks,max_blocks,steps,max_steps,score,max_score);
 				avg=avg+pop[i][2];
 				if pop[i][2]>best_f then
@@ -644,7 +728,7 @@ while true do
 				end
 				ti=1;
 				break;
-			end]]
+			end
 
 			--This is used to make sure a button is held down(Left or Right) for 'frame_gap' amount of frames for smooth movement.(Important)
 			if count<frame_gap then
