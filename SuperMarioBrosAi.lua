@@ -374,106 +374,29 @@ function md5.Calc(s)
   return string.format("%08x%08x%08x%08x",swap(a),swap(b),swap(c),swap(d))
 end
 
+
+
 --MEMORY ADDRESSES USED IN THE RAM ON FCEUX.
 local world_ad = 0x075f;
 local level_ad = 0x0760;
 local player_horiz_pos_ad = 0x006d;
 local player_x_pos_ad = 0x071d;
-local player_y_ad = 0x00ce;
-local powerup_state_ad = 0x0756;
-local walk_animation_ad = 0x0702;
-local speed_ad = 0x0700;
-local swimming_ad = 0x0704;
-local pause_status_ad = 0x0776;
-local gravity_ad = 0x709;
-local coins_ad = 0x7ed;
-local coins2_ad = 0x7ee;
-local fireball_counter_ad = 0x06ce;
-local collision_ad = 0x0490;
-local collision2_ad = 0x0491;
-local vert_velocity_ad = 0x0433;
-local player_x_force_ad = 0x0400;
 local lives_ad = 0x075a;
 local player_float_status_ad = 0x001d;
+local player_state_ad = 0x000e;
 
-local enemy_drawn1_ad = 0x000f;
-local enemy_drawn2_ad = 0x0010;
-local enemy_drawn3_ad = 0x0011;
-local enemy_drawn4_ad = 0x0012;
-local enemy_drawn5_ad = 0x0013;
-local enemy_type1_ad = 0x0016;
-local enemy_type2_ad = 0x0017;
-local enemy_type3_ad = 0x0018;
-local enemy_type4_ad = 0x0019;
-local enemy_type5_ad = 0x001a;
-
-local fireball_relative_x_ad = 0x03af;
-local fireball_relative_y_ad = 0x03ba;
-
-local enemy_x_pos1_ad = 0x03ae;
-local enemy_x_pos2_ad = 0x03af;
-local enemy_x_pos3_ad = 0x03b0;
-local enemy_x_pos4_ad = 0x03b1;
-local enemy_x_pos5_ad = 0x03b2;
-local enemy_y_pos_ad = 0x03b9;
-local enemy_y_pos2_ad = 0x03ba;
-local enemy_y_pos3_ad = 0x03bb;
-local enemy_y_pos4_ad = 0x03bc;
-local enemy_y_pos5_ad = 0x03bd;
-
-local powerup_drawn_ad = 0x0014;
-local powerup_x_ad = 0x03b3;
-local powerup_y_ad = 0x03be;
-
-local fireball_hitbox1_ad = 0x04c8;
-local fireball_hitbox2_ad = 0x04c9;
-local fireball_hitbox3_ad = 0x04ca;
-local fireball_hitbox4_ad = 0x04cb;
-local fireball_hitbox5_ad = 0x04cc;
-local fireball_hitbox6_ad = 0x04cd;
-local fireball_hitbox7_ad = 0x04ce;
-local fireball_hitbox8_ad = 0x04cf;
-
-local hammer_hitbox1_ad = 0x04d0;
-local hammer_hitbox2_ad = 0x04d1;
-local hammer_hitbox3_ad = 0x04d2;
-local hammer_hitbox4_ad = 0x04d3;
-local hammer_hitbox5_ad = 0x04d4;
-local hammer_hitbox6_ad = 0x04d5;
-local hammer_hitbox7_ad = 0x04d6;
-local hammer_hitbox8_ad = 0x04d7;
-local hammer_hitbox9_ad = 0x04d8;
-local hammer_hitbox10_ad = 0x04d9;
-local hammer_hitbox11_ad = 0x04da;
-local hammer_hitbox12_ad = 0x04db;
-local hammer_hitbox13_ad = 0x04dc;
-local hammer_hitbox14_ad = 0x04dd;
-local hammer_hitbox15_ad = 0x04de;
-local hammer_hitbox16_ad = 0x04df;
-
-local coin_hitbox1_ad = 0x04e0;
-local coin_hitbox2_ad = 0x04e1;
-local coin_hitbox3_ad = 0x04e2;
-local coin_hitbox4_ad = 0x04e3;
-local coin_hitbox5_ad = 0x04e4;
-local coin_hitbox6_ad = 0x04e5;
-local coin_hitbox7_ad = 0x04e6;
-local coin_hitbox8_ad = 0x04e7;
-local coin_hitbox9_ad = 0x04e8;
-local coin_hitbox10_ad = 0x04e9;
-local coin_hitbox11_ad = 0x04ea;
-local coin_hitbox12_ad = 0x04eb;
 
 --Variables specific to Genetic Algorithms
-local no_controls=15;                       --The total number of moves the paddle can make(Length of the chromosome)
+local chrom_size = 64;                      --Length of the chromosome
 local population_size=200;                  --Size of the population.
 local cr_rate=0.2;                          --The amount of top performers selected from the population(Multiply by 100 to get percentage)
-local mut_rate = 1;                         --The Mutation rate. Keep it as low as possible.
+local mut_rate = 2;                         --The Mutation rate. Keep it as low as possible.
 local frame_gap=20;                         --The number of frames each input is run for.
 local max_score=50000;                      --The Maximum possible score for a level(Arbitrary)
 local steps=0;                              --The number of frames that the game has played for (Can be used for fitness).
 local max_steps=6000;                       --The maximum number of frames the game can play for.
 
+local control_gap=5;
 local inputs = {};
 
 for i=1,2 do								--Create power set of possible inputs
@@ -506,24 +429,14 @@ for i=1,2 do								--Create power set of possible inputs
 							B_val = false;
 						else B_val = true;
 						end
-						for o=1,2 do
-							if o==1 then
-								start_val = false;
-							else start_val = true;
-							end
-							for p=1,2 do
-								if p==1 then
-									select_val = false;
-								else select_val = true;
-								end
 								table.insert(inputs, {up = up_val,
 													down = down_val,
 													left = left_val,
 													right = right_val,
 													A = A_val,
 													B = B_val,
-													start = start_val,
-													select = select_val
+													start = 0,
+													select = 0
 													})
 								
 							end
@@ -532,42 +445,15 @@ for i=1,2 do								--Create power set of possible inputs
 				end
 			end
 		end
-	end
-end
 
---[[for i=1,2 do
-	for j=1,2 do
-		for k=1,2 do
-			for l=1,2 do
-				for m=1,2 do
-					for n=1,2 do
-						for o=1,2 do
-							for p=1,2 do
-								table.insert(inputs, {up = i-1,
-													down = j-1,
-													left = k-1,
-													right = l-1,
-													A = m-1,
-													B = n-1,
-													start = o-1,
-													select = p-1
-													})
-								
-							end
-						end
-					end
-				end
-			end
-		end
-	end
-end]]
 
 
 --Create a random chromosome of size=sz. Eg: 11000110111110
 function create_member(sz)
 	r='';
 	for i=1,sz do
-		k=math.random(0,1);
+		k=math.random(0,63);
+		if k<10 then r = r..0
 		r=r..k;
 	end
 	return r;
@@ -576,7 +462,7 @@ end
 
 --The Fitness formula, 
 function fitness(world, level, horiz_pos, x_pos)
-	return world*100000 + level*10000 + 1000*horiz_pos +x_pos;
+	return (world)*27000000 + (level)*90000 + 300*horiz_pos + x_pos;
 end
 
 
@@ -589,7 +475,8 @@ function gen_population(size,n_controls)
 			if cand[1]==nil then
 				cand[1]='';
 			end
-			k=math.random(0,1)
+			k=math.random(0,63)
+			if k<10 then cand[1]=cand[1]..0
 			cand[1]=cand[1]..k
 		end
 		cand[2]=0
@@ -602,8 +489,13 @@ end
 
 --This is where crossover happens
 function crossover(population,rate)
+
 	--Select Top percentile players from population based on the Rate.
 	local topp=math.floor(rate*(#population));
+	
+	--[[if gen_count%30==0 then
+		control_gap=control_gap-1;
+	end]]
 	
 	--Store the top performers in a new table.
 	top={}
@@ -622,11 +514,13 @@ function crossover(population,rate)
 		end
 		population[i][2]=0;
 	end
+	--Increase chromosome size
+	chrom_size=chrom_size+control_gap;
 	
 
 	--Make last ten members of population Random, This helps to find a variety of beginning positions in the starting generations and prevents convergence to local optima.
 	for i=#population-9,#population do
-		population[i][1]=create_member(no_controls);
+		population[i][1]=create_member(chrom_size);
 		population[i][2]=0;		
 	end
 end
@@ -638,38 +532,21 @@ function mutation(population,mut_rate)
 	local b=1;
     for i=1, #population do
         for j=1, #(population[i][1]) do
-            if math.random(1, 120) <= mut_rate then
-            	if string.sub(population[i][1],j,j)=='1' then
-                population[i][1] = string.sub(population[i][1],1,j-1)..a..string.sub(population[i][1],j+1);
-            else
-            	population[i][1] = string.sub(population[i][1],1,j-1)..b..string.sub(population[i][1],j+1);
-            end
-            end
+			
+			local s = tonumber(population[i][1], 2);
+			for k=1, #s do
+				if math.random(1, 100) <= mut_rate then
+					if string.sub(s,k,k)=='1' then
+						s = string.sub(s,1,k-1)..a..string.sub(s,k+1);
+					else
+						s = string.sub(s,1,k-1)..b..string.sub(s,k+1);
+					end
+				end
+			end
+			s = tonumber(s, 64);
+			population[i][1] = string.sub(population[i][1],1,j-1)..s..string.sub(population[i][1],j+1);
         end
     end
-end
-
-function game_state() 
-	local state = world..level..player_horiz_pos..player_x_pos..player_y_pos;
-	local state2 = state..powerup_state..walk_animation..speed..swimming;
-	state = state2..pause_status..gravity..coins..coins2..fireball_counter;
-	state2 = state..collision..collision2..vert_velocity..player_x_force;
-	state = state2..lives..player_float_status..enemy_drawn1..enemy_drawn2;
-	state2 = state..enemy_drawn3..enemy_drawn4..enemy_drawn5..enemy_type1;
-	state = state2..enemy_type2..enemy_type3..enemy_type4..enemy_type5;
-	state2 = state..fireball_relative_x..fireball_relative_y..enemy_x_pos1;
-	state = state2..enemy_x_pos2..enemy_x_pos3..enemy_x_pos4..enemy_x_pos5;
-	state2 = state..enemy_y_pos..enemy_y_pos2..enemy_y_pos3..enemy_y_pos4;
-	state = state2..enemy_y_pos5..powerup_drawn..powerup_x..powerup_y..fireball_hitbox1;
-	state2 = state..fireball_hitbox2..fireball_hitbox3..fireball_hitbox4..fireball_hitbox5;
-	state = state2..fireball_hitbox6..fireball_hitbox7..fireball_hitbox8..hammer_hitbox1;
-	state2 = state..hammer_hitbox2..hammer_hitbox3..hammer_hitbox4..hammer_hitbox5..hammer_hitbox6;
-	state = state2..hammer_hitbox7..hammer_hitbox8..hammer_hitbox9..hammer_hitbox10;
-	state2 = state..hammer_hitbox11..hammer_hitbox12..hammer_hitbox13..hammer_hitbox14;
-	state = state2..hammer_hitbox15..hammer_hitbox16..coin_hitbox1..coin_hitbox2;
-	state2 = state..coin_hitbox3..coin_hitbox4..coin_hitbox5..coin_hitbox6..coin_hitbox7;
-	state = state2..coin_hitbox8..coin_hitbox9..coin_hitbox10;
-	return state;
 end
 
 --Read initial values from memory when the script is run after game starts.
@@ -677,90 +554,9 @@ world = memory.readbyte(world_ad);
 level = memory.readbyte(level_ad);
 player_horiz_pos = memory.readbyte(player_horiz_pos_ad);
 player_x_pos = memory.readbyte(player_x_pos_ad);
-player_y_pos = memory.readbyte(player_y_ad);
-powerup_state = memory.readbyte(powerup_state_ad);
-walk_animation = memory.readbyte(walk_animation_ad);
-speed = memory.readbyte(speed_ad);
-swimming = memory.readbyte(swimming_ad);
-pause_status = memory.readbyte(pause_status_ad);
-gravity = memory.readbyte(gravity_ad);
-coins = memory.readbyte(coins_ad);
-coins2 = memory.readbyte(coins2_ad);
-fireball_counter = memory.readbyte(fireball_counter_ad);
-collision = memory.readbyte(collision_ad);
-collision2 = memory.readbyte(collision2_ad);
-vert_velocity = memory.readbyte(vert_velocity_ad);
-player_x_force = memory.readbyte(player_x_force_ad);
 lives = memory.readbyte(lives_ad);
 player_float_status = memory.readbyte(player_float_status_ad);
-
-enemy_drawn1 = memory.readbyte(enemy_drawn1_ad);
-enemy_drawn2 = memory.readbyte(enemy_drawn2_ad);
-enemy_drawn3 = memory.readbyte(enemy_drawn3_ad);
-enemy_drawn4 = memory.readbyte(enemy_drawn4_ad);
-enemy_drawn5 = memory.readbyte(enemy_drawn5_ad);
-enemy_type1 = memory.readbyte(enemy_type1_ad);
-enemy_type2 = memory.readbyte(enemy_type2_ad);
-enemy_type3 = memory.readbyte(enemy_type3_ad);
-enemy_type4 = memory.readbyte(enemy_type4_ad);
-enemy_type5 = memory.readbyte(enemy_type5_ad);
-
-fireball_relative_x = memory.readbyte(fireball_relative_x_ad);
-fireball_relative_y = memory.readbyte(fireball_relative_y_ad);
-
-enemy_x_pos1 = memory.readbyte(enemy_x_pos1_ad);
-enemy_x_pos2 = memory.readbyte(enemy_x_pos2_ad);
-enemy_x_pos3 = memory.readbyte(enemy_x_pos3_ad);
-enemy_x_pos4 = memory.readbyte(enemy_x_pos4_ad);
-enemy_x_pos5 = memory.readbyte(enemy_x_pos5_ad);
-enemy_y_pos = memory.readbyte(enemy_y_pos_ad);
-enemy_y_pos2 = memory.readbyte(enemy_y_pos2_ad);
-enemy_y_pos3 = memory.readbyte(enemy_y_pos3_ad);
-enemy_y_pos4 = memory.readbyte(enemy_y_pos4_ad);
-enemy_y_pos5 = memory.readbyte(enemy_y_pos5_ad);
-
-powerup_drawn = memory.readbyte(powerup_drawn_ad);
-powerup_x = memory.readbyte(powerup_x_ad);
-powerup_y = memory.readbyte(powerup_y_ad);
-
-fireball_hitbox1 = memory.readbyte(fireball_hitbox1_ad);
-fireball_hitbox2 = memory.readbyte(fireball_hitbox2_ad);
-fireball_hitbox3 = memory.readbyte(fireball_hitbox3_ad);
-fireball_hitbox4 = memory.readbyte(fireball_hitbox4_ad);
-fireball_hitbox5 = memory.readbyte(fireball_hitbox5_ad);
-fireball_hitbox6 = memory.readbyte(fireball_hitbox6_ad);
-fireball_hitbox7 = memory.readbyte(fireball_hitbox7_ad);
-fireball_hitbox8 = memory.readbyte(fireball_hitbox8_ad);
-
-hammer_hitbox1 = memory.readbyte(hammer_hitbox1_ad);
-hammer_hitbox2 = memory.readbyte(hammer_hitbox2_ad);
-hammer_hitbox3 = memory.readbyte(hammer_hitbox3_ad);
-hammer_hitbox4 = memory.readbyte(hammer_hitbox4_ad);
-hammer_hitbox5 = memory.readbyte(hammer_hitbox5_ad);
-hammer_hitbox6 = memory.readbyte(hammer_hitbox6_ad);
-hammer_hitbox7 = memory.readbyte(hammer_hitbox7_ad)
-hammer_hitbox8 = memory.readbyte(hammer_hitbox8_ad);
-hammer_hitbox9 = memory.readbyte(hammer_hitbox9_ad);
-hammer_hitbox10 = memory.readbyte(hammer_hitbox10_ad);
-hammer_hitbox11 = memory.readbyte(hammer_hitbox11_ad);
-hammer_hitbox12 = memory.readbyte(hammer_hitbox12_ad);
-hammer_hitbox13 = memory.readbyte(hammer_hitbox13_ad);
-hammer_hitbox14 = memory.readbyte(hammer_hitbox14_ad);
-hammer_hitbox15 = memory.readbyte(hammer_hitbox15_ad);
-hammer_hitbox16 = memory.readbyte(hammer_hitbox16_ad);
-
-coin_hitbox1 = memory.readbyte(coin_hitbox1_ad);
-coin_hitbox2 = memory.readbyte(coin_hitbox2_ad);
-coin_hitbox3 = memory.readbyte(coin_hitbox3_ad);
-coin_hitbox4 = memory.readbyte(coin_hitbox4_ad);
-coin_hitbox5 = memory.readbyte(coin_hitbox5_ad);
-coin_hitbox6 = memory.readbyte(coin_hitbox6_ad);
-coin_hitbox7 = memory.readbyte(coin_hitbox7_ad);
-coin_hitbox8 = memory.readbyte(coin_hitbox8_ad);
-coin_hitbox9 = memory.readbyte(coin_hitbox9_ad);
-coin_hitbox10 = memory.readbyte(coin_hitbox10_ad);
-coin_hitbox11 = memory.readbyte(coin_hitbox11_ad);
-coin_hitbox12 = memory.readbyte(coin_hitbox12_ad);
+player_state = memory.readbyte(player_state_ad);
 
 --Temporary variables for debugging and use in the game
 local score=0;
@@ -774,13 +570,29 @@ local cand_num;
 local count=0;
 local ti;
 
+--Seeding improves randomness
+math.randomseed(os.time());
+
+--emu.speedmode("maximum");
+game_start = {up = false,
+down = false,
+left = false,
+right = false,
+A = false,
+B = false,
+start = true,
+select = false
+}
+joypad.set(1, game_start);
+emu.frameadvance();
+
 --Create a save state when script is started, this is always loaded again when a new player plays the game.
 ss=savestate.create();
 savestate.save(ss);
 --Generate the initial population.
-pop=gen_population(population_size,no_controls)
+pop=gen_population(population_size,chrom_size)
 
-emu.speedmode("maximum");
+
 --The Loop where learning takes place(or finding optimal solution!)
 while true do
 
@@ -792,9 +604,11 @@ while true do
 	gen_count=gen_count+1;
 	--Initialize average fitness each generation.
 	avg=0;
-
+	print("Generation: "..gen_count);
 	--A loop for each member of the population.
 	for i=1,population_size do
+		local screen = 0;
+		print("Candidate: "..i);
 		
 		--Break if a winner is found
 		if winner==1 then
@@ -818,7 +632,7 @@ while true do
 		
 		--TODO: Change loop. We are not iterating through an input string.
 		--Loop to run on the input string. Iterates through each bit.
-		while lives~=0xff and steps <950 do
+		while ti<=chrom_size do
 			--Increase steps
 			steps=steps+1;
 			--Read memory and update variables
@@ -826,95 +640,15 @@ while true do
 			level = memory.readbyte(level_ad);
 			player_horiz_pos = memory.readbyte(player_horiz_pos_ad);
 			player_x_pos = memory.readbyte(player_x_pos_ad);
-			player_y_pos = memory.readbyte(player_y_ad);
-			powerup_state = memory.readbyte(powerup_state_ad);
-			walk_animation = memory.readbyte(walk_animation_ad);
-			speed = memory.readbyte(speed_ad);
-			swimming = memory.readbyte(swimming_ad);
-			pause_status = memory.readbyte(pause_status_ad);
-			gravity = memory.readbyte(gravity_ad);
-			coins = memory.readbyte(coins_ad);
-			coins2 = memory.readbyte(coins2_ad);
-			fireball_counter = memory.readbyte(fireball_counter_ad);
-			collion = memory.readbyte(collision_ad);
-			collion2 = memory.readbyte(collision2_ad);
-			vert_velocity = memory.readbyte(vert_velocity_ad);
-			player_x_force = memory.readbyte(player_x_force_ad);
 			lives = memory.readbyte(lives_ad);
 			player_float_status = memory.readbyte(player_float_status_ad);
+			player_state = memory.readbyte(player_state_ad);
 
-			enemy_drawn1 = memory.readbyte(enemy_drawn1_ad);
-			enemy_drawn2 = memory.readbyte(enemy_drawn2_ad);
-			enemy_drawn3 = memory.readbyte(enemy_drawn3_ad);
-			enemy_drawn4 = memory.readbyte(enemy_drawn4_ad);
-			enemy_drawn5 = memory.readbyte(enemy_drawn5_ad);
-			enemy_type1 = memory.readbyte(enemy_type1_ad);
-			enemy_type2 = memory.readbyte(enemy_type2_ad);
-			enemy_type3 = memory.readbyte(enemy_type3_ad);
-			enemy_type4 = memory.readbyte(enemy_type4_ad);
-			enemy_type5 = memory.readbyte(enemy_type5_ad);
-
-			fireball_relative_x = memory.readbyte(fireball_relative_x_ad);
-			fireball_relative_y = memory.readbyte(fireball_relative_y_ad);
-
-			enemy_x_pos1 = memory.readbyte(enemy_x_pos1_ad);
-			enemy_x_pos2 = memory.readbyte(enemy_x_pos2_ad);
-			enemy_x_pos3 = memory.readbyte(enemy_x_pos3_ad);
-			enemy_x_pos4 = memory.readbyte(enemy_x_pos4_ad);
-			enemy_x_pos5 = memory.readbyte(enemy_x_pos5_ad);
-			enemy_y_pos = memory.readbyte(enemy_y_pos_ad);
-			enemy_y_pos2 = memory.readbyte(enemy_y_pos2_ad);
-			enemy_y_pos3 = memory.readbyte(enemy_y_pos3_ad);
-			enemy_y_pos4 = memory.readbyte(enemy_y_pos4_ad);
-			enemy_y_pos5 = memory.readbyte(enemy_y_pos5_ad);
-
-			powerup_drawn = memory.readbyte(powerup_drawn_ad);
-			powerup_x = memory.readbyte(powerup_x_ad);
-			powerup_y = memory.readbyte(powerup_y_ad);
-
-			fireball_hitbox1 = memory.readbyte(fireball_hitbox1_ad);
-			fireball_hitbox2 = memory.readbyte(fireball_hitbox2_ad);
-			fireball_hitbox3 = memory.readbyte(fireball_hitbox3_ad);
-			fireball_hitbox4 = memory.readbyte(fireball_hitbox4_ad);
-			fireball_hitbox5 = memory.readbyte(fireball_hitbox5_ad);
-			fireball_hitbox6 = memory.readbyte(fireball_hitbox6_ad);
-			fireball_hitbox7 = memory.readbyte(fireball_hitbox7_ad);
-			fireball_hitbox8 = memory.readbyte(fireball_hitbox8_ad);
-
-			hammer_hitbox1 = memory.readbyte(hammer_hitbox1_ad);
-			hammer_hitbox2 = memory.readbyte(hammer_hitbox2_ad);
-			hammer_hitbox3 = memory.readbyte(hammer_hitbox3_ad);
-			hammer_hitbox4 = memory.readbyte(hammer_hitbox4_ad);
-			hammer_hitbox5 = memory.readbyte(hammer_hitbox5_ad);
-			hammer_hitbox6 = memory.readbyte(hammer_hitbox6_ad);
-			hammer_hitbox7 = memory.readbyte(hammer_hitbox7_ad)
-			hammer_hitbox8 = memory.readbyte(hammer_hitbox8_ad);
-			hammer_hitbox9 = memory.readbyte(hammer_hitbox9_ad);
-			hammer_hitbox10 = memory.readbyte(hammer_hitbox10_ad);
-			hammer_hitbox11 = memory.readbyte(hammer_hitbox11_ad);
-			hammer_hitbox12 = memory.readbyte(hammer_hitbox12_ad);
-			hammer_hitbox13 = memory.readbyte(hammer_hitbox13_ad);
-			hammer_hitbox14 = memory.readbyte(hammer_hitbox14_ad);
-			hammer_hitbox15 = memory.readbyte(hammer_hitbox15_ad);
-			hammer_hitbox16 = memory.readbyte(hammer_hitbox16_ad);
-
-			coin_hitbox1 = memory.readbyte(coin_hitbox1_ad);
-			coin_hitbox2 = memory.readbyte(coin_hitbox2_ad);
-			coin_hitbox3 = memory.readbyte(coin_hitbox3_ad);
-			coin_hitbox4 = memory.readbyte(coin_hitbox4_ad);
-			coin_hitbox5 = memory.readbyte(coin_hitbox5_ad);
-			coin_hitbox6 = memory.readbyte(coin_hitbox6_ad);
-			coin_hitbox7 = memory.readbyte(coin_hitbox7_ad);
-			coin_hitbox8 = memory.readbyte(coin_hitbox8_ad);
-			coin_hitbox9 = memory.readbyte(coin_hitbox9_ad);
-			coin_hitbox10 = memory.readbyte(coin_hitbox10_ad);
-			coin_hitbox11 = memory.readbyte(coin_hitbox11_ad);
-			coin_hitbox12 = memory.readbyte(coin_hitbox12_ad);
 			--Used for debugging only!
 			
 			--Checks if it is game over or player is dead, then writes its fitness and calculates average, and remembers if it the best fitness.
-			if lives==0xff then
-				pop[i][2]=fitness(world,level,player_horiz_pos,player_x_pos);
+			if lives==0x01 then
+				pop[i][2]=fitness(world, level, screen, player_x_pos);
 				avg=avg+pop[i][2];
 				if pop[i][2]>best_f then
 					best_f=pop[i][2];
@@ -922,6 +656,12 @@ while true do
 				ti=1;
 				break;
 			end
+			
+			--Check if player has reached new screen
+			if player_x_pos==0x00 and player_horiz_pos==screen then
+				screen = screen+1;
+			end
+			
 			
 			--Winning condition, if the player is sliding down the flagpole, it is the winner
 			  if player_float_status==0x03 then
@@ -932,33 +672,36 @@ while true do
 			end
 
 			local state = game_state();
-			seed = state..cand;
-			math.randomseed(seed);
+			local seed = cand..state;
+			
 
 			--This is used to make sure a button is held down(Left or Right) for 'frame_gap' amount of frames for smooth movement.(Important)
 			if count<frame_gap then
 				for k=1,frame_gap-count do
 					--Print information onto the game surface.
 					gui.text(0, 9, "Generation:"..gen_count);
-					gui.text(0,39,"Candidate:"..i)
 					gui.text(0,19,"BestFit:"..best_f);
-					--gui.text(0,29,"Blocks:"..no_blocks);
-					gui.text(0,49,"Control:"..ti);
+					gui.text(0,29,"Candidate:"..i)
 					
-					tbl_index = math.random(1, 256);
+					gui.text(0,49,"Current Fitness:"..fitness(world, level, screen, player_x_pos));
+					gui.text(0,59,"Candidate's Best Fitness: "..best_cand_fitness);
+					--gui.text(0,29,"Blocks:"..no_blocks);
+					--gui.text(0,49,"Control:"..ti);
+					math.random() math.random() math.random()
+					tbl_index = math.random(1, 64);
 					tbl = inputs[tbl_index];
+					--print("Input: "..tbl_index);
 			        --Table of what buttons to hold down/press.
-					gui.text(0, 59, "Up:"..tostring(tbl["up"]));	
-					gui.text(0, 69, "Down:"..tostring(tbl["down"]));
-					gui.text(0, 79, "Left:"..tostring(tbl["left"]));
-					gui.text(0, 89, "Right:"..tostring(tbl["right"]));
-					gui.text(0, 99, "Start:"..tostring(tbl["A"]));
-					gui.text(0, 109, "Select:"..tostring(tbl["B"]));
-					gui.text(0, 119, "A:"..tostring(tbl["start"]));
-					gui.text(0, 129, "B"..tostring(tbl["select"]));
-					gui.text(0, 139, "tbl_index"..tbl_index);
-					gui.text(0, 149, "seed"..seed);
-					gui.text(0, 159, "steps"..steps);
+					gui.text(0, 79, "Up: "..tostring(tbl["up"]));	
+					gui.text(0, 89, "Down: "..tostring(tbl["down"]));
+					gui.text(0, 99, "Left: "..tostring(tbl["left"]));
+					gui.text(0, 109, "Right: "..tostring(tbl["right"]));
+					gui.text(0, 119, "A: "..tostring(tbl["A"]));
+					gui.text(0, 129, "B: "..tostring(tbl["B"]));
+					--gui.text(0, 149, "Chromosome: "..tostring(cand));
+					--gui.text(0, 139, "tbl_index"..tbl_index);
+					--gui.text(0, 149, "seed"..seed);
+					--gui.text(0, 159, "steps"..steps);
 			        --set controls on the joypad.
 	        		joypad.set(1,tbl);
 	        		--Advance one frame
@@ -970,49 +713,37 @@ while true do
 			else
 				count=0
 				--Table of controls.
-				tbl_index = math.random(1, 256);
+				math.random() math.random() math.random()
+				tbl_index = math.random(1, 64);
 		    	tbl = inputs[tbl_index];
 		        -- set buttons on joypad
 		        joypad.set(1,tbl);
 		        --Print information on game Surface
 				gui.text(0, 9, "Generation:"..gen_count);
-				gui.text(0,39,"Candidate:"..i)
 				gui.text(0,19,"BestFit:"..best_f);
-				gui.text(0,49,"Control:"..ti);
+				gui.text(0,29,"Candidate:"..i)
+					
+				gui.text(0,49,"Current Fitness:"..fitness(world, level, screen, player_x_pos));
+				gui.text(0,59,"Candidate's Best Fitness: "..best_cand_fitness);
+					--gui.text(0,49,"Control:"..ti);
+				--print("Input: "..tbl_index);
 				 --Table of what buttons to hold down/press.
-					gui.text(0, 59, "Up:"..tostring(tbl["up"]));	
-					gui.text(0, 69, "Down:"..tostring(tbl["down"]));
-					gui.text(0, 79, "Left:"..tostring(tbl["left"]));
-					gui.text(0, 89, "Right:"..tostring(tbl["right"]));
-					gui.text(0, 99, "Start:"..tostring(tbl["A"]));
-					gui.text(0, 109, "Select:"..tostring(tbl["B"]));
-					gui.text(0, 119, "A:"..tostring(tbl["start"]));
-					gui.text(0, 129, "B"..tostring(tbl["select"]));
-					gui.text(0, 139, "tbl_index"..tbl_index);
-					gui.text(0, 149, "seed"..seed); 
-					gui.text(0, 159, "steps"..steps);
+					gui.text(0, 79, "Up: "..tostring(tbl["up"]));	
+					gui.text(0, 89, "Down: "..tostring(tbl["down"]));
+					gui.text(0, 99, "Left: "..tostring(tbl["left"]));
+					gui.text(0, 109, "Right: "..tostring(tbl["right"]));
+					gui.text(0, 119, "A: "..tostring(tbl["A"]));
+					gui.text(0, 129, "B: "..tostring(tbl["B"]));
+					--gui.text(0, 149, "Chromosome: "..tostring(cand));
+					--gui.text(0, 139, "tbl_index"..tbl_index);
+					--gui.text(0, 149, "seed"..seed);
+					--gui.text(0, 159, "steps"..steps);
 				emu.frameadvance();
 				-- Look at next control bit
 				ti=ti+1;
 			end
 		end
-		--[[
-		--In the beggining if the game ends prematurely due to lack of control bits, then fitness is calculated again.
-		if ti>=no_controls then
-
-			ball_pos_y=memory.readbyte(ball_pos_y_addr);
-			no_blocks=memory.readbyte(no_of_blocks_addr);
-			pad_pos=memory.readbyte(pad_addr);
-			ball_pos_x=memory.readbyte(ball_pos_x_addr);
-			is_dead=memory.readbyte(death);
-			
-			pop[i][2]=fitness(no_blocks,max_blocks,steps,max_steps,score,max_score);
-				avg=avg+pop[i][2];
-				if pop[i][2]>best_f then
-					best_f=pop[i][2];
-				end
-		end]]
-		pop[i][2] = fitness(world, level, player_horiz_pos, player_x_pos);
+		print("Candidate "..i..": "..cand.." Fitness: "..pop[i][2]);
 	end
 	--Sort the population with best fitness being the first
 	table.sort(pop,
@@ -1023,10 +754,6 @@ while true do
                 return false;
             end
         end);
-	print("Generation: "..gen_count);
-	for i=1, population_size do
-		print("Candidate: "..pop[i][1].." Fitness: "..pop[i][2]);
-	end
 	--Crossover
 	crossover(pop,cr_rate);
 	--Average Population calculation
@@ -1045,7 +772,7 @@ while true do
 		steps=0;
 		local j=1;
 		ti=1;
-		while lives ~= 0Xff do
+		while lives ~= 0X01 do
 
 			steps=steps+1;
 			--READING MEMORY
@@ -1139,7 +866,7 @@ while true do
 			coin_hitbox12 = memory.readbyte(coin_hitbox12_ad);
 			
 			
-			if lives==0xff then
+			if lives==0x01 then
 				break;
 			end
 			if player_float_status==0x03 then
@@ -1148,8 +875,9 @@ while true do
 			if count<frame_gap then
 				for k=1,frame_gap-count do
 					local state = game_state();
-					math.randomseed(state..cand);
-					tbl_index = math.random(1, 256);
+					
+					math.random() math.random() math.random()
+					tbl_index = math.random(1, 64);
 					tbl = inputs[tbl_index];
 	        		joypad.set(1,tbl);
 					emu.frameadvance();
@@ -1158,8 +886,9 @@ while true do
 			else
 				count=0;
 		    	local state = game_state();
-				math.randomseed(state..cand);
-				tbl_index = math.random(1, 256);
+				
+				math.random() math.random() math.random()
+				tbl_index = math.random(1, 64);
 		    	tbl = inputs[tbl_index];
 		        joypad.set(1,tbl);emu.frameadvance();
 				ti=ti+1;
