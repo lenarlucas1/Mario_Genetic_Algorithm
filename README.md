@@ -1,6 +1,6 @@
 # A Genetic Algorithm to Play Super Mario Bros.
-** README to be updated **
-Genetic Algorithms usually have long training times, in this project, I try to write an AI as well as reduce learning time, using chromosome growth.
+** This project is a modification of a genetic algorithm for Arkanoid: https://github.com/SurenderHarsha/Arakanoid_Genetic_Algorithm 
+This README is an artifact from the original project and needs to be updated. **
 
 ## The Game
 Arkanoid is a game for the NES console which was inspired by the original Atari Breakout. It is a slightly complicated version, it involves power ups for paddle or ball(Multi-Ball, PadLengthIncrement, MagneticPad etc). It also includes a variety of enemies in each level and different positioning of blocks. There are also different types of blocks which take multiple hits to destroy.
